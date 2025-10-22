@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerie per PDF, DOCX e Sanificazione HTML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <style>
+        /* Stile personalizzato per un look più professionale */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .prompt-item.active {
+            background-color: #3b82f6; /* bg-blue-600 */
+            color: white;
+        }
+        .prompt-item.active:hover {
+            background-color: #2563eb; /* bg-blue-700 */
+        }
+        .drop-zone-active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .dark .drop-zone-active {
+            border-color: #3b82f6;
+            background-color: #1e293b;
+        }
+
+        /* Stili per l'output HTML renderizzato */
+        #output-content h1, #output-content h2, #output-content h3 { font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; }
+        #output-content h1 { font-size: 1.5em; }
+        #output-content h2 { font-size: 1.25em; }
+        #output-content h3 { font-size: 1.1em; }
+        #output-content p { margin-bottom: 0.75rem; line-height: 1.6; }
+        #output-content ul, #output-content ol { margin-left: 1.5rem; margin-bottom: 1rem; list-style-position: outside; }
+        #output-content ul { list-style-type: disc; }
+        #output-content ol { list-style-type: decimal; }
+        #output-content li { margin-bottom: 0.25rem; }
+        #output-content strong { font-weight: bold; }
+        #output-content em { font-style: italic; }
+        #output-content blockquote { border-left: 4px solid #ccc; padding-left: 1rem; margin-left: 0; font-style: italic; color: #666; }
+        .dark #output-content blockquote { border-left-color: #666; color: #bbb; }
+
+        /* Stili per i link nell'output */
+        #output-content a {
+            color: #2563eb;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+        .dark #output-content a {
+            color: #60a5fa;
+        }
+        #output-content a:hover {
+            color: #1d4ed8;
+        }
+        .dark #output-content a:hover {
+            color: #93c5fd;
+        }
+
+        /* Animazione per lo spinner */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s ease infinite;
+        }
+        .dark .spinner {
+             border-left-color: #60a5fa;
+        }
+
+        /* Stili per il selettore di modalità */
+        .search-mode-btn {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid transparent;
+        }
+        .search-mode-btn.active {
+            background-color: white;
+            color: #2563eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .dark .search-mode-btn {
+            color: #d1d5db;
+        }
+        .dark .search-mode-btn.active {
+            background-color: #1f2937;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 antialiased">
+
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-md p-4 flex justify-between items-center flex-shrink-0">
+             <div>
+                <h1 class="text-xl font-bold text-gray-700 dark:text-gray-200">Assistente AI</h1>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Assistente AI per l'Avvocato</p>
+            </div>
+            <button id="settings-btn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Impostazioni">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow flex flex-col md:flex-row overflow-hidden">
+            <!-- Sidebar con lista dei prompt -->
+            <aside class="w-full md:w-1/3 lg:w-1/4 bg-white dark:bg-gray-800 p-4 border-r dark:border-gray-700 overflow-y-auto">
+                <h2 class="text-lg font-semibold mb-4">Seleziona un Prompt</h2>
+                <div id="prompt-list" class="space-y-2">
+                    <!-- I prompt verranno inseriti qui dal JS -->
+                </div>
+
+                <!-- SEZIONE: DATASET LOCALE -->
+                <hr class="my-4 dark:border-gray-600">
+                <h2 class="text-lg font-semibold mb-2">Dataset Locale</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Carica i tuoi file .txt per la ricerca locale (sentenze, normativa, precedenti).</p>
+                <input type="file" id="dataset-upload" multiple accept=".txt" class="block w-full text-sm text-gray-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-50 file:text-blue-700
+                  hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300 dark:hover:file:bg-blue-800 cursor-pointer">
+                <div id="dataset-file-list" class="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <p>Nessun file caricato.</p>
+                </div>
+            </aside>
+
+            <!-- Area Principale di Interazione -->
+            <section class="w-full md:w-2/3 lg:w-3/4 flex flex-col p-6 space-y-4">
+                <div>
+                    <h2 id="selected-prompt-title" class="text-2xl font-bold text-blue-600 dark:text-blue-400">Seleziona un prompt per iniziare</h2>
+                    <p id="selected-prompt-description" class="text-gray-500 dark:text-gray-400 mt-1">Scegli un modello dalla lista a sinistra.</p>
+                </div>
+
+                <!-- Area di Input e Drop Zone -->
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 flex flex-col h-1/3 transition-colors">
+                    <label for="context-input" class="font-semibold mb-2 flex-shrink-0">Contesto / Documento da Analizzare</label>
+                    <textarea id="context-input" class="w-full h-full bg-transparent dark:bg-gray-800 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none p-2 resize-none flex-grow" placeholder="Incolla qui l'atto processuale da analizzare, oppure trascina un file (.txt, .md, .pdf, .docx). Puoi anche inserire una query per ricerca giurisprudenziale nel dataset locale."></textarea>
+                    <p id="drop-message" class="text-center text-sm text-gray-400 mt-2 flex-shrink-0">Trascina e rilascia un file qui</p>
+                </div>
+
+                <!-- Selettore Modalità Ricerca e Pulsante Genera -->
+                <div class="flex flex-col sm:flex-row justify-end items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                    <!-- Selettore a 3 stati -->
+                    <div class="flex items-center space-x-1 rounded-lg bg-gray-200 dark:bg-gray-700 p-1">
+                        <button id="search-mode-web" class="search-mode-btn">
+                            Web
+                        </button>
+                        <button id="search-mode-local" class="search-mode-btn">
+                            Locale
+                        </button>
+                        <button id="search-mode-hybrid" class="search-mode-btn">
+                            Ibrido
+                        </button>
+                    </div>
+
+                    <button id="generate-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors disabled:bg-gray-400">
+                        Genera Risposta
+                    </button>
+                </div>
+
+                <!-- Area di Output -->
+                <div class="flex-grow bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700 flex flex-col overflow-hidden min-h-0">
+                     <h3 class="font-semibold mb-2 text-lg flex-shrink-0">Risultato Generato</h3>
+                    <div id="output-area" class="text-gray-600 dark:text-gray-300 flex-grow overflow-y-auto">
+                        <div id="spinner-container" class="hidden justify-center items-center py-8">
+                            <div class="spinner"></div>
+                        </div>
+                       <div id="output-content" class="text-sm">L'output dell'IA apparirà qui...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modale Impostazioni -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center hidden z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md m-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Impostazioni</h2>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">&times;</button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label for="api-key-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Chiave API Gemini</label>
+                    <input type="password" id="api-key-input" class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Inserisci la tua chiave API">
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">La tua chiave API è salvata solo nel tuo browser e non viene condivisa. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Ottieni una chiave API qui.</a></p>
+                </div>
+
+                <fieldset>
+                    <legend class="text-sm font-medium text-gray-700 dark:text-gray-300">Seleziona Modello</legend>
+                    <div class="mt-2 space-y-2">
+                        <div class="flex items-center">
+                            <input id="model-flash" name="model" type="radio" value="gemini-2.0-flash-exp" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
+                            <label for="model-flash" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Gemini 2.0 Flash <span class="text-xs text-gray-500">(Veloce, per compiti standard)</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="model-pro" name="model" type="radio" value="gemini-2.0-pro-exp" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
+                            <label for="model-pro" class="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Gemini 2.0 Pro <span class="text-xs text-gray-500">(Avanzato, per compiti complessi)</span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="mt-8 flex justify-end space-x-4">
+                 <button id="cancel-settings-btn" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">Annulla</button>
+                <button id="save-settings-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Salva Impostazioni</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- DEFINIZIONE DEI PROMPT PER AVVOCATI ---
+        const BASE_META_PROMPT = `Da questo momento, agisci come assistente legale altamente specializzato per avvocati, con funzione di supporto tecnico-giuridico nella preparazione della strategia difensiva.
+
+Ti impongo i seguenti **vincoli operativi tassativi** per l'intera durata della nostra interazione, ordinati per priorità assoluta:
+
+**REGOLA SOVRANA: TOLLERANZA ZERO PER LE ALLUCINAZIONI E OBBLIGO DI VERIFICABILITÀ**
+`;
+
+        const WEB_SEARCH_RULES = `
+1.  **Obbligo di Fondatezza (Grounding):** Devi *sempre* attivare e utilizzare lo strumento di ricerca (Google Search) per trovare e verificare *tutte* le informazioni giuridiche, giurisprudenziali e dottrinali richieste.
+2.  **Divieto Assoluto di Invenzione:** Non puoi citare alcuna sentenza, norma o fonte che non sia stata *direttamente* reperita e verificata tramite lo strumento di ricerca.
+3.  **Prevalenza della Non-Risposta:** È categoricamente preferibile dichiarare "**Fonte non reperita**" o "**Verifica non possibile**" piuttosto che fornire una singola informazione che non sia **certa, verificata e reale** tramite lo strumento di ricerca.`;
+
+        const LOCAL_SEARCH_RULES = `
+1.  **Obbligo di Fondatezza (Locale):** Devi basare la tua risposta *esclusivamente* sul "CONTESTO RILEVANTE DAL DATASET LOCALE" fornito di seguito. Non puoi usare la conoscenza esterna o il web.
+2.  **Divieto Assoluto di Invenzione:** Non puoi citare alcuna sentenza, norma o fonte che non sia *esplicitamente presente* nel contesto fornito.
+3.  **Prevalenza della Non-Risposta:** Se l'informazione richiesta non è presente nel contesto fornito, devi dichiarare "**Informazione non trovata nel dataset locale**".`;
+
+        const HYBRID_SEARCH_RULES = `
+1.  **Obbligo di Fondatezza (Ibrida):** Devi basare la tua risposta su *due* fonti: 1) Il "CONTESTO RILEVANTE DAL DATASET LOCALE" fornito di seguito, e 2) Lo strumento di ricerca (Google Search) che devi attivare.
+2.  **Obiettivo di Sintesi:** Il tuo scopo è arricchire, confrontare e sintetizzare le informazioni provenienti da *entrambe* le fonti. Devi chiaramente distinguere quando un'informazione proviene dal dataset locale e quando proviene dal web.
+3.  **Divieto Assoluto di Invenzione:** Non puoi citare alcuna sentenza, norma o fonte che non sia *esplicitamente presente* nel contesto locale O che non sia stata *direttamente* reperita e verificata tramite lo strumento di ricerca.
+4.  **Prevalenza della Non-Risposta:** Se un'informazione non è reperibile in nessuna delle due fonti, devi dichiararlo esplicitamente.`;
+
+        const COMMON_RULES = `
+**VINCOLI SECONDARI (da rispettare solo se la Regola Sovrana è soddisfatta):**
+5.  **Formato HTML:** Formatta la tua risposta in HTML ben strutturato per migliorare la leggibilità. Usa paragrafi, grassetto, elenchi e altri elementi appropriati. Non includere \`<html>\`, \`<head>\`, o \`<body>\` tags, fornisci solo il contenuto interno al body.
+6.  **Obbligo di Citazione Puntuale (Pin-Cite):** Qualsiasi estratto testuale o principio di diritto riportato deve essere *sempre* accompagnato dalla fonte esatta, completa di estremi (Organo, Sezione, n./ECLI, data) e, ove possibile, dal paragrafo o dalla pagina specifica (*pin-cite*) da cui è tratto.
+7.  **Citazione Fonti e Link:**
+    * **Fonti Web (Modalità Web/Ibrida):** Per ogni citazione da fonti web, *devi* includere un link (\`<a>\` tag) che punta *esclusivamente* all'URL della fonte *reale* fornito dalla ricerca. Usa \`target='_blank'\`.
+    * **Fonti Locali (Modalità Locale/Ibrida):** Cita *sempre* il nome del file (es. "Fonte: sentenze_appello.txt"). In aggiunta, *tenta* di estrarre [Tipo Ufficio], [Città], [Anno] e [Numero] dal testo della fonte. Se e *solo se* riesci a estrarre *tutti e quattro* i componenti con certezza:
+        1.  Normalizza [Tipo Ufficio] e [Città] in minuscolo e sostituisci gli spazi con trattini (es. 'corte-appello', 'milano').
+        2.  Costruisci un link ipertestuale nel formato \`https://apps.dirittopratico.it/sentenza/[tipo]/[citta]/[anno]/[numero].html\`
+        3.  Presentalo accanto alla citazione.
+        4.  Se anche un solo componente è incerto o mancante, *non creare il link* e cita solo il nome del file.
+8.  **Divieto di Link Generici:** È fatto esplicito divieto di creare link ipertestuali che puntino a una *ricerca* Google generica (es. \`google.com/search?...\`). I link devono puntare solo alla fonte primaria.
+9.  **Approccio Strategico Difensivo:** Nella tua analisi, evidenzia opportunità difensive, punti deboli delle argomentazioni avversarie, e suggerisci strategie processuali efficaci. Mantieni un registro professionale e tecnico-giuridico.
+10. **Confidenzialità:** Non generare, inferire o richiedere dati personali sensibili. Tratta tutti i documenti con la massima riservatezza professionale.
+11. **Sezione di Controllo Finale:** Concludi ogni risposta che contiene ricerche o citazioni con una sezione denominata "**Verifiche di Attendibilità Effettuate**", elencando sinteticamente le fonti reali consultate (sia web che locali).
+
+Conferma di aver compreso e accettato questa gerarchia di vincoli.`;
+
+        const prompts = [
+            {
+                id: 'analisi_completa',
+                title: 'A. Analisi Completa Atto Avversario',
+                description: 'Estrae e analizza: domande, ricostruzione in fatto, argomentazioni giuridiche e conclusioni.',
+                template: `**Oggetto:** Analisi completa dell'atto processuale avversario.\n**Atto da Analizzare:** [CONTESTO UTENTE]\n**Consegna:**\n1. **DOMANDE**: Estrai ed elenca tutte le domande giudiziali formulate dalla controparte (principale, subordinate, eventuali).\n2. **RICOSTRUZIONE IN FATTO**: Sintetizza la ricostruzione fattuale operata dalla controparte, evidenziando i fatti costitutivi allegati e i mezzi di prova indicati.\n3. **ARGOMENTAZIONI GIURIDICHE**: Analizza la qualificazione giuridica dei fatti, i riferimenti normativi invocati, e la ratio delle argomentazioni avversarie.\n4. **CONCLUSIONI**: Riporta letteralmente le conclusioni formali dell'atto.\n5. **SINTESI CRITICA**: Individua eventuali contraddizioni, lacune probatorie, o debolezze argomentative che possano essere sfruttate in difesa.`
+            },
+            {
+                id: 'sintesi_schematica',
+                title: 'B. Sintesi Schematica Ragionata',
+                description: 'Produce uno schema strutturato dell\'atto con citazioni testuali dei passaggi chiave.',
+                template: `**Oggetto:** Sintesi schematica ragionata dell'atto processuale.\n**Atto da Analizzare:** [CONTESTO UTENTE]\n**Consegna:**\nProduci uno schema strutturato che includa:\n1. **Intestazione e Parti**: Individuazione delle parti processuali e loro posizione.\n2. **Domande** (schema numerato con citazioni testuali).\n3. **Fatto** (sintesi per punti con riferimenti ai paragrafi dell'atto originale).\n4. **Diritto** (schema degli argomenti giuridici con citazioni normative e giurisprudenziali).\n5. **Prove** (elenco documenti e mezzi istruttori richiesti).\n6. **Conclusioni** (testo integrale).\n7. **Note strategiche**: Breve commento sui punti vulnerabili dell'avversario.`
+            },
+            {
+                id: 'verifica_congruenza',
+                title: 'C. Verifica Congruenza Documentale',
+                description: 'Confronta le produzioni documentali con le deduzioni avversarie per identificare incongruenze.',
+                template: `**Oggetto:** Verifica della congruenza tra produzioni documentali e deduzioni avversarie.\n**Contesto:** [CONTESTO UTENTE]\n**Consegna:**\n1. Estrai l'elenco delle produzioni documentali citate nell'atto avversario.\n2. Confronta ciascun documento con le specifiche allegazioni fattuali e giuridiche a cui è posto a supporto.\n3. Individua:\n   - **Incongruenze**: Documenti che non provano quanto dedotto o che lo contraddicono.\n   - **Lacune**: Allegazioni prive di supporto documentale adeguato.\n   - **Documenti rilevanti non prodotti**: Prove che l'avversario avrebbe dovuto produrre ma che mancano.\n4. Fornisci una valutazione critica dell'apparato probatorio avversario con suggerimenti per contestazioni o richieste istruttorie in replica.`
+            },
+            {
+                id: 'bozza_comparsa',
+                title: 'D. Bozza Comparsa di Risposta',
+                description: 'Prepara la struttura e i contenuti essenziali per la comparsa di risposta o memoria difensiva.',
+                template: `**Oggetto:** Bozza di comparsa di risposta/memoria difensiva.\n**Atto Avversario:** [CONTESTO UTENTE]\n**Consegna:**\nRedigi una bozza strutturata di comparsa di risposta che includa:\n1. **Intestazione e Premessa processuale** (tipo di giudizio, fase, termini).\n2. **IN FATTO**: Contestazione della ricostruzione avversaria punto per punto, con indicazione delle prove contrarie e ricostruzione difensiva alternativa.\n3. **IN DIRITTO**: Confutazione delle argomentazioni giuridiche avversarie con:\n   - Riferimenti normativi a sostegno della tesi difensiva.\n   - Giurisprudenza rilevante (ricercata tramite grounding se modalità web/ibrida attiva).\n   - Principi di diritto applicabili.\n4. **PROVE**: Elencazione documenti, richieste istruttorie (testi, CTU, ecc.).\n5. **CONCLUSIONI**: Formulazione delle conclusioni tecniche (rigetto domande avversarie, accoglimento domande riconvenzionali se del caso).\n6. **Note tattiche**: Suggerimenti su strategie processuali alternative o ulteriori sviluppi da considerare.`
+            },
+            {
+                id: 'strategia_difensiva',
+                title: 'E. Strategia Difensiva e Linee di Replica',
+                description: 'Identifica le migliori linee difensive e strategie processuali da adottare.',
+                template: `**Oggetto:** Individuazione strategia difensiva e linee di replica.\n**Contesto:** [CONTESTO UTENTE]\n**Consegna:**\n1. **Analisi dei Punti di Forza dell'Avversario**: Identifica gli argomenti più solidi della controparte e le prove a sostegno.\n2. **Individuazione Punti Deboli**: Evidenzia le vulnerabilità della tesi avversaria (lacune probatorie, contraddizioni, errori giuridici).\n3. **Linee Difensive Alternative**:\n   - **Linea Principale**: Strategia difensiva privilegiata con relativi argomenti.\n   - **Linee Subordinate**: Alternative difensive da percorrere in via gradata.\n4. **Eccezioni Processuali**: Verifica la presenza di vizi formali, decadenze, prescrizioni o altre eccezioni rilevabili.\n5. **Giurisprudenza a Sostegno**: Ricerca (se modalità web/ibrida) di precedenti favorevoli alla tesi difensiva.\n6. **Piano Probatorio**: Suggerimenti su prove da acquisire, capitoli di prova testimoniale, richieste di CTU o altri mezzi istruttori.\n7. **Conclusioni Strategiche**: Sintesi delle raccomandazioni operative per la difesa.`
+            }
+        ];
+
+        // --- STATO DELL'APPLICAZIONE ---
+        let selectedPromptId = null;
+        let apiKey = '';
+        let selectedModel = 'gemini-2.0-flash-exp';
+        let searchMode = 'web'; // 'web', 'local', 'hybrid'
+        let datasetSentenze = []; // Array di oggetti { fileName: '...', content: '...' }
+
+        // --- SELETTORI DOM ---
+        const promptList = document.getElementById('prompt-list');
+        const selectedPromptTitle = document.getElementById('selected-prompt-title');
+        const selectedPromptDescription = document.getElementById('selected-prompt-description');
+        const contextInput = document.getElementById('context-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const outputContent = document.getElementById('output-content');
+        const spinnerContainer = document.getElementById('spinner-container');
+
+        // Impostazioni
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const modelFlashRadio = document.getElementById('model-flash');
+        const modelProRadio = document.getElementById('model-pro');
+
+        // Drop Zone
+        const dropZone = document.getElementById('drop-zone');
+        const dropMessage = document.getElementById('drop-message');
+
+        // Dataset Locale
+        const datasetUpload = document.getElementById('dataset-upload');
+        const datasetFileList = document.getElementById('dataset-file-list');
+
+        // Selettori per la modalità di ricerca
+        const searchModeWebBtn = document.getElementById('search-mode-web');
+        const searchModeLocalBtn = document.getElementById('search-mode-local');
+        const searchModeHybridBtn = document.getElementById('search-mode-hybrid');
+
+        // Configura il worker per PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+        // --- FUNZIONI ---
+
+        function renderPromptList() {
+            promptList.innerHTML = '';
+            prompts.forEach(prompt => {
+                const item = document.createElement('button');
+                item.className = 'prompt-item w-full text-left p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+                item.dataset.id = prompt.id;
+                item.innerHTML = `
+                    <p class="font-semibold">${prompt.title}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">${prompt.description}</p>
+                `;
+                item.addEventListener('click', () => selectPrompt(prompt.id));
+                promptList.appendChild(item);
+            });
+        }
+
+        function selectPrompt(id) {
+            selectedPromptId = id;
+            const prompt = prompts.find(p => p.id === id);
+
+            selectedPromptTitle.textContent = prompt.title;
+            selectedPromptDescription.textContent = prompt.description;
+
+            document.querySelectorAll('.prompt-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.id === id);
+            });
+            contextInput.focus();
+        }
+
+        async function handleGenerate() {
+            if (!selectedPromptId || !contextInput.value.trim()) {
+                alert('Per favore, seleziona un prompt e inserisci il contesto/atto da analizzare.');
+                return;
+            }
+            if (!apiKey) {
+                alert('Per favore, inserisci la tua chiave API nelle impostazioni.');
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
+            const prompt = prompts.find(p => p.id === selectedPromptId);
+            const userContext = contextInput.value;
+            // Sostituisce i placeholder nel template del prompt
+            const finalPromptText = prompt.template.replace(/\[CONTESTO UTENTE\]/g, userContext);
+
+            generateBtn.disabled = true;
+            spinnerContainer.classList.remove('hidden');
+            spinnerContainer.classList.add('flex');
+            outputContent.innerHTML = '';
+
+            // --- Logica di Costruzione Payload ---
+            let fullPayload = {
+                contents: [{ parts: [] }]
+            };
+            let finalMetaPrompt = BASE_META_PROMPT;
+            let finalApiPrompt = '';
+            let relevantContext = '';
+
+            if (searchMode === 'local' || searchMode === 'hybrid') {
+                if (datasetSentenze.length === 0) {
+                    alert(`Modalità '${searchMode}' attiva, ma nessun file è stato caricato. Carica i file .txt nell'area 'Dataset Locale' a sinistra.`);
+                    generateBtn.disabled = false;
+                    spinnerContainer.classList.add('hidden');
+                    spinnerContainer.classList.remove('flex');
+                    return;
+                }
+                relevantContext = findRelevantContext(userContext, datasetSentenze);
+            }
+
+            switch (searchMode) {
+                case 'web':
+                    finalMetaPrompt += WEB_SEARCH_RULES + COMMON_RULES;
+                    finalApiPrompt = `${finalMetaPrompt}\n\n---\n\nRICHIESTA UTENTE:\n${finalPromptText}`;
+                    fullPayload.contents[0].parts.push({ text: finalApiPrompt });
+                    fullPayload.tools = [{ "google_search": {} }]; // Abilita il grounding web
+                    break;
+
+                case 'local':
+                    finalMetaPrompt += LOCAL_SEARCH_RULES + COMMON_RULES;
+                    finalApiPrompt = `${finalMetaPrompt}\n\n---\n\nCONTESTO RILEVANTE DAL DATASET LOCALE (Rispondi *solo* sulla base di questo):\n${relevantContext}\n\n---\n\nRICHIESTA UTENTE:\n${finalPromptText}`;
+                    fullPayload.contents[0].parts.push({ text: finalApiPrompt });
+                    // Nessun 'tools'
+                    break;
+
+                case 'hybrid':
+                    finalMetaPrompt += HYBRID_SEARCH_RULES + COMMON_RULES;
+                    finalApiPrompt = `${finalMetaPrompt}\n\n---\n\nCONTESTO RILEVANTE DAL DATASET LOCALE:\n${relevantContext}\n\n---\n\nRICHIESTA UTENTE (da confrontare anche con ricerca web):\n${finalPromptText}`;
+                    fullPayload.contents[0].parts.push({ text: finalApiPrompt });
+                    fullPayload.tools = [{ "google_search": {} }]; // Abilita ANCHE il grounding web
+                    break;
+            }
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fullPayload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error.message || `Errore HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content.parts[0].text) {
+                    // Gestisce risposte vuote o bloccate
+                    let safetyMessage = "La risposta è stata bloccata per motivi di sicurezza o non ha prodotto contenuto.";
+                    if (data.promptFeedback && data.promptFeedback.blockReason) {
+                        safetyMessage = `Risposta bloccata: ${data.promptFeedback.blockReason}`;
+                    }
+                    outputContent.innerHTML = `<p><strong>${safetyMessage}</strong></p><p>Prova a riformulare la richiesta o controlla il contenuto del file caricato.</p>`;
+                } else {
+                    const text = data.candidates[0].content.parts[0].text;
+                    // Sanifica l'HTML consentendo <a> e l'attributo 'target'
+                    outputContent.innerHTML = DOMPurify.sanitize(text, {ADD_ATTR: ['target']});
+                }
+
+            } catch (error) {
+                console.error("Dettagli dell'errore API:", error);
+                let errorMessage = `<h3>Si è verificato un errore.</h3>`;
+                errorMessage += `<p>Possibili cause:</p><ul>`;
+                errorMessage += `<li><strong>Chiave API non valida o mancante.</strong> Controlla nelle impostazioni.</li>`;
+                errorMessage += `<li><strong>Problemi di connessione a Internet,</strong> firewall o VPN che bloccano la richiesta.</li>`;
+                errorMessage += `<li>Un'estensione del browser (come un ad-blocker) sta interferendo.</li>`;
+                errorMessage += `<li>L'endpoint dell'API di Google non è raggiungibile.</li></ul>`;
+                errorMessage += `<p><br><strong>Dettagli tecnici:</strong> ${error.message}</p>`;
+                outputContent.innerHTML = errorMessage;
+            } finally {
+                generateBtn.disabled = false;
+                spinnerContainer.classList.add('hidden');
+                spinnerContainer.classList.remove('flex');
+            }
+        }
+
+        // --- IMPOSTAZIONI ---
+        function openSettings() {
+            apiKeyInput.value = apiKey;
+            if (selectedModel === 'gemini-2.0-pro-exp') {
+                modelProRadio.checked = true;
+            } else {
+                modelFlashRadio.checked = true;
+            }
+            settingsModal.classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            settingsModal.classList.add('hidden');
+        }
+
+        function saveSettings() {
+            apiKey = apiKeyInput.value.trim();
+            selectedModel = modelProRadio.checked ? 'gemini-2.0-pro-exp' : 'gemini-2.0-flash-exp';
+
+            localStorage.setItem('avvocatoApiKey', apiKey);
+            localStorage.setItem('avvocatoSelectedModel', selectedModel);
+
+            closeSettings();
+            alert('Impostazioni salvate.');
+        }
+
+        function loadSettings() {
+            apiKey = localStorage.getItem('avvocatoApiKey') || '';
+            selectedModel = localStorage.getItem('avvocatoSelectedModel') || 'gemini-2.0-flash-exp';
+        }
+
+        // --- DRAG AND DROP ---
+        function handleDragOver(e) {
+            e.preventDefault();
+            dropZone.classList.add('drop-zone-active');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone-active');
+        }
+
+        async function handleDrop(e) {
+            e.preventDefault();
+            dropZone.classList.remove('drop-zone-active');
+
+            const files = e.dataTransfer.files;
+            if (files.length === 0) return;
+
+            const file = files[0];
+            dropMessage.textContent = `Caricamento in corso: ${file.name}...`;
+            contextInput.value = '';
+
+            try {
+                let textContent = '';
+                if (file.type.startsWith('text/')) {
+                    textContent = await file.text();
+                } else if (file.type === 'application/pdf') {
+                    textContent = await parsePdf(file);
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    textContent = await parseDocx(file);
+                } else {
+                    alert('Formato file non supportato. Per favore, trascina un file .txt, .md, .pdf, o .docx.');
+                    dropMessage.textContent = 'Trascina e rilascia un file qui';
+                    return;
+                }
+                contextInput.value = textContent;
+                dropMessage.textContent = `File caricato: ${file.name}`;
+            } catch (error) {
+                console.error('Errore durante la lettura del file:', error);
+                alert(`Impossibile leggere il file ${file.name}. Assicurati che non sia protetto o corrotto.`);
+                dropMessage.textContent = 'Trascina e rilascia un file qui';
+            }
+        }
+
+        function parsePdf(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const pdf = await pdfjsLib.getDocument(event.target.result).promise;
+                        let fullText = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += pageText + '\n\n';
+                        }
+                        resolve(fullText);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function parseDocx(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const result = await mammoth.extractRawText({ arrayBuffer: event.target.result });
+                        resolve(result.value);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- FUNZIONI: DATASET LOCALE E SELETTORE MODALITÀ ---
+
+        function setSearchMode(mode) {
+            searchMode = mode;
+
+            // Aggiorna UI Pulsanti
+            searchModeWebBtn.classList.toggle('active', mode === 'web');
+            searchModeLocalBtn.classList.toggle('active', mode === 'local');
+            searchModeHybridBtn.classList.toggle('active', mode === 'hybrid');
+
+            // Disabilita i pulsanti 'Locale' e 'Ibrido' se nessun dataset è caricato
+            if (datasetSentenze.length === 0) {
+                searchModeLocalBtn.disabled = true;
+                searchModeHybridBtn.disabled = true;
+                searchModeLocalBtn.title = "Carica prima un dataset locale";
+                searchModeHybridBtn.title = "Carica prima un dataset locale";
+            } else {
+                searchModeLocalBtn.disabled = false;
+                searchModeHybridBtn.disabled = false;
+                searchModeLocalBtn.title = "";
+                searchModeHybridBtn.title = "";
+            }
+        }
+
+        async function handleDatasetUpload(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            datasetSentenze = []; // Svuota il dataset precedente
+            datasetFileList.innerHTML = '<p>Caricamento dataset...</p>';
+
+            let loadedFiles = [];
+            for (const file of files) {
+                if (file.type === 'text/plain') {
+                    try {
+                        const content = await file.text();
+                        datasetSentenze.push({ fileName: file.name, content: content });
+                        loadedFiles.push(file.name);
+                    } catch (err) {
+                        console.error(`Errore nel leggere ${file.name}:`, err);
+                    }
+                }
+            }
+
+            if (loadedFiles.length > 0) {
+                 datasetFileList.innerHTML = `<strong>File caricati:</strong><ul class="list-disc pl-5">${loadedFiles.map(name => `<li>${name}</li>`).join('')}</ul>`;
+            } else {
+                datasetFileList.innerHTML = `<p>Nessun file .txt valido selezionato.</p>`;
+            }
+
+            // Ri-valuta lo stato dei pulsanti
+            setSearchMode(searchMode);
+        }
+
+        function findRelevantContext(query, dataset) {
+            // Algoritmo di ricerca per parole chiave
+            const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 3);
+            let passages = [];
+
+            dataset.forEach(doc => {
+                const paragraphs = doc.content.split(/\n\s*\n/);
+                paragraphs.forEach(p => {
+                    const pLower = p.toLowerCase();
+                    let score = 0;
+                    keywords.forEach(kw => {
+                        if (pLower.includes(kw)) {
+                            score++;
+                        }
+                    });
+
+                    if (score > 0) {
+                        passages.push({ text: p, score: score, source: doc.fileName });
+                    }
+                });
+            });
+
+            // Ordina per rilevanza
+            passages.sort((a, b) => b.score - a.score);
+
+            // Prendi i 5 passaggi migliori
+            const topPassages = passages.slice(0, 5);
+
+            if (topPassages.length === 0) {
+                return "Nessun contesto rilevante trovato nel dataset locale per la query.";
+            }
+
+            return topPassages.map(p => `(Fonte: ${p.source})\n${p.text}`).join('\n\n---\n\n');
+        }
+
+
+        // --- INIZIALIZZAZIONE ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            renderPromptList();
+            selectPrompt('analisi_completa');
+
+            generateBtn.addEventListener('click', handleGenerate);
+            settingsBtn.addEventListener('click', openSettings);
+            closeModalBtn.addEventListener('click', closeSettings);
+            cancelSettingsBtn.addEventListener('click', closeSettings);
+            saveSettingsBtn.addEventListener('click', saveSettings);
+
+            dropZone.addEventListener('dragover', handleDragOver);
+            dropZone.addEventListener('dragleave', handleDragLeave);
+            dropZone.addEventListener('drop', handleDrop);
+
+            datasetUpload.addEventListener('change', handleDatasetUpload);
+            searchModeWebBtn.addEventListener('click', () => setSearchMode('web'));
+            searchModeLocalBtn.addEventListener('click', () => setSearchMode('local'));
+            searchModeHybridBtn.addEventListener('click', () => setSearchMode('hybrid'));
+
+            // Imposta lo stato iniziale del selettore
+            setSearchMode('web');
+        });
+    </script>
+</body>
+</html>
